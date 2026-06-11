@@ -2,20 +2,18 @@ import type { PaginationMeta, Product } from "@repo/contracts";
 
 import type { ProductRow } from "../database/schema";
 
-/** Converts a raw DB row into the public API representation. */
 export function toProduct(row: ProductRow): Product {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    // NUMERIC columns are returned as strings by node-postgres.
+    // NUMERIC columns come back as strings from node-postgres.
     price: Number(row.price),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-/** Builds pagination metadata from the current page, page size and total. */
 export function buildPaginationMeta(
   page: number,
   limit: number,

@@ -7,10 +7,6 @@ import type { Env } from "../config/env";
 import { DATABASE_POOL, DRIZZLE } from "./database.tokens";
 import * as schema from "./schema";
 
-/**
- * Global module exposing a single Drizzle instance (and its pg pool) to the
- * whole app. The pool is closed on shutdown so connections drain gracefully.
- */
 @Global()
 @Module({
   providers: [

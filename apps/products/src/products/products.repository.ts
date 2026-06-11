@@ -25,16 +25,14 @@ export class ProductsRepository {
       .values({
         name: data.name,
         description: data.description,
-        // NUMERIC accepts a string; format to 2 dp to match the column scale.
+        // NUMERIC accepts a string; format to the column's 2dp scale.
         price: data.price.toFixed(2),
       })
       .returning();
 
-    // `returning()` always yields the inserted row.
     return row as ProductRow;
   }
 
-  /** Deletes a product, returning the deleted row (or undefined if missing). */
   async deleteById(id: string): Promise<ProductRow | undefined> {
     const [row] = await this.db
       .delete(products)
@@ -44,7 +42,6 @@ export class ProductsRepository {
     return row;
   }
 
-  /** Returns a page of products (newest first) plus the total row count. */
   async findPaginated(page: number, limit: number): Promise<PaginatedRows> {
     const offset = (page - 1) * limit;
 

@@ -9,7 +9,6 @@ export interface CreateProductInput {
   price: number;
 }
 
-/** Error carrying the HTTP status alongside a human-readable message. */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -48,7 +47,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
     if (Array.isArray(body.message)) return body.message.join(", ");
     if (body.message) return body.message;
   } catch {
-    // fall through to status text
+    // ignore non-JSON error bodies
   }
   return response.statusText || "Request failed";
 }
@@ -57,9 +56,7 @@ export function fetchProducts(
   page: number,
   limit: number,
 ): Promise<Paginated<Product>> {
-  return request<Paginated<Product>>(
-    `/products?page=${page}&limit=${limit}`,
-  );
+  return request<Paginated<Product>>(`/products?page=${page}&limit=${limit}`);
 }
 
 export function createProduct(input: CreateProductInput): Promise<Product> {

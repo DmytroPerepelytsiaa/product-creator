@@ -7,10 +7,6 @@ import type { Env } from "../config/env";
 import { ProductEventsPublisher } from "./product-events.publisher";
 import { NOTIFICATIONS_CLIENT } from "./messaging.tokens";
 
-/**
- * Wires up the RabbitMQ client used to emit product events to the
- * Notifications service over a durable queue.
- */
 @Module({
   imports: [
     ClientsModule.registerAsync([

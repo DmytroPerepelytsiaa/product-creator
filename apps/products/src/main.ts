@@ -26,7 +26,6 @@ async function bootstrap(): Promise<void> {
     .map((origin) => origin.trim());
   app.enableCors({ origin: corsOrigin });
 
-  // Ensures onModuleDestroy hooks (e.g. closing the pg pool) run on SIGTERM.
   app.enableShutdownHooks();
 
   const port = config.get("PORT", { infer: true });

@@ -9,7 +9,6 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-/** Validates env vars, throwing a readable error on misconfiguration. */
 export function validateEnv(config: Record<string, unknown>): Env {
   const result = envSchema.safeParse(config);
 

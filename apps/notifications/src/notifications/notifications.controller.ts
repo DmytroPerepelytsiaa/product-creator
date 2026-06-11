@@ -6,10 +6,6 @@ import {
   ProductEventPattern,
 } from "@repo/contracts";
 
-/**
- * Consumes product lifecycle events from RabbitMQ and logs them. This is the
- * sole responsibility of the Notifications service: listen and log.
- */
 @Controller()
 export class NotificationsController {
   private readonly logger = new Logger(NotificationsController.name);

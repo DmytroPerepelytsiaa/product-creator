@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-/**
- * Schema for all environment variables the Products service depends on.
- * Validated once at boot so the app fails fast on misconfiguration.
- */
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -16,7 +12,6 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-/** Used by `ConfigModule.forRoot({ validate })`. */
 export function validateEnv(config: Record<string, unknown>): Env {
   const result = envSchema.safeParse(config);
 

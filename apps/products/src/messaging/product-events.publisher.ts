@@ -10,13 +10,8 @@ import { lastValueFrom } from "rxjs";
 
 import { NOTIFICATIONS_CLIENT } from "./messaging.tokens";
 
-/**
- * Publishes product lifecycle events to RabbitMQ.
- *
- * Notifications are a best-effort side effect: if the broker is unavailable we
- * log the failure but never fail the originating HTTP request, since the
- * product change has already been committed to the database.
- */
+// Publishing is best-effort: a broker outage is logged but never fails the
+// originating request, since the product change is already committed.
 @Injectable()
 export class ProductEventsPublisher {
   private readonly logger = new Logger(ProductEventsPublisher.name);
