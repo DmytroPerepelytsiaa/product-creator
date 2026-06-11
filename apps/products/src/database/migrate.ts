@@ -4,8 +4,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
-// Standalone runner used both locally and in the container; relies only on
-// runtime deps (drizzle-orm), never on drizzle-kit.
 async function runMigrations(): Promise<void> {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -15,7 +13,6 @@ async function runMigrations(): Promise<void> {
   const pool = new Pool({ connectionString });
   const db = drizzle(pool);
 
-  // Resolves to apps/products/drizzle from both src (tsx) and dist (node).
   const migrationsFolder = path.resolve(__dirname, "../../drizzle");
 
   console.log(`Applying migrations from ${migrationsFolder} ...`);
