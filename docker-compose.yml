@@ -1,0 +1,45 @@
+# Local infrastructure for the monorepo: PostgreSQL + RabbitMQ.
+# The application services (products, notifications, web) run on the host via
+# `pnpm dev`. Start this first with: docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: product_creator
+    ports:
+      - "5432:5432"
+    volumes:
+      - pc-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d product_creator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pc-rabbitmq
+    restart: unless-stopped
+    # A dedicated (non-"guest") user so connections over the published port are
+    # accepted — RabbitMQ restricts the default guest account to loopback only.
+    environment:
+      RABBITMQ_DEFAULT_USER: app
+      RABBITMQ_DEFAULT_PASS: app
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI (http://localhost:15672)
+    volumes:
+      - pc-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  pc-postgres-data:
+  pc-rabbitmq-data:

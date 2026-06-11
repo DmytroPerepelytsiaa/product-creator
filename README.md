@@ -1,159 +1,184 @@
-# Turborepo starter
+# Product Creator
 
-This Turborepo starter is maintained by the Turborepo core team.
+A small product-catalog application built as a **Turborepo monorepo** with two
+NestJS microservices, a Next.js frontend, PostgreSQL (via Drizzle ORM) and
+**RabbitMQ** for inter-service messaging.
 
-## Using this example
+Creating or deleting a product persists it in Postgres and publishes an event to
+RabbitMQ; a separate **Notifications** service consumes those events and logs
+them.
 
-Run the following command:
-
-```sh
-npx create-turbo@latest
+```
+                 HTTP (REST)                AMQP (RabbitMQ)
+   ┌────────┐   ───────────►   ┌──────────┐   ──────────►   ┌───────────────┐
+   │  web   │                  │ products │                 │ notifications │
+   │ Next.js│   ◄───────────   │ NestJS   │   product.*     │ NestJS        │
+   └────────┘    JSON          └────┬─────┘   events        └───────────────┘
+                                    │ SQL
+                                    ▼
+                              ┌──────────┐
+                              │ Postgres │
+                              └──────────┘
 ```
 
-## What's inside?
+## Tech stack
 
-This Turborepo includes the following packages/apps:
+| Concern            | Choice                                                        |
+| ------------------ | ------------------------------------------------------------- |
+| Language           | TypeScript (strict)                                           |
+| Monorepo           | Turborepo + pnpm workspaces                                   |
+| Backend framework  | NestJS 11                                                     |
+| Database           | PostgreSQL 16                                                 |
+| ORM & migrations   | Drizzle ORM + drizzle-kit                                     |
+| Message broker     | RabbitMQ (NestJS RMQ transport)                               |
+| Frontend           | Next.js 16 (App Router), React 19                             |
+| UI                 | Tailwind CSS v4 + Radix UI primitives                         |
+| Data fetching/form | TanStack Query, React Hook Form, Zod                          |
 
-### Apps and Packages
+## Repository layout
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```
+apps/
+  products/          NestJS REST API · Drizzle/Postgres · RabbitMQ producer
+  notifications/     NestJS microservice · RabbitMQ consumer (logs events)
+  web/               Next.js frontend (product list, create & delete dialogs)
+packages/
+  contracts/         Shared event contracts + Product/pagination types
+  eslint-config/     Shared ESLint config (base / nest / next-js)
+  typescript-config/ Shared tsconfig presets (base / nestjs / nextjs)
+docker-compose.yml   Local infrastructure: Postgres + RabbitMQ
 ```
 
-Without global `turbo`, use your package manager:
+The `@repo/contracts` package is the single source of truth for the messaging
+schema (queue name, routing patterns, event payloads) so the producer and
+consumer can never drift apart. It also exports the `Product` / pagination types
+consumed by the frontend.
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+## Prerequisites
+
+- **Node.js ≥ 18** (developed on 22)
+- **pnpm 9** — `corepack enable && corepack prepare pnpm@9 --activate`
+- **Docker** (for Postgres + RabbitMQ)
+
+## Getting started
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Start infrastructure (Postgres + RabbitMQ)
+docker compose up -d
+
+# 3. Create the env files (defaults already point at the compose services)
+cp apps/products/.env.example      apps/products/.env
+cp apps/notifications/.env.example apps/notifications/.env
+cp apps/web/.env.example           apps/web/.env.local
+
+# 4. Apply database migrations
+pnpm --filter products db:migrate:dev
+
+# 5. Run everything (products :3001, notifications, web :3000)
+pnpm dev
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Then open **http://localhost:3000**.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+- Products API: `http://localhost:3001/api`
+- RabbitMQ management UI: `http://localhost:15672` (user `app` / pass `app`)
 
-```sh
-turbo build --filter=docs
+> The `.env.example` files use the credentials from `docker-compose.yml`, so the
+> defaults work out of the box. A pre-generated migration lives in
+> `apps/products/drizzle/`.
+
+### Try it
+
+Create a product and watch the **notifications** service log the event:
+
+```bash
+curl -X POST http://localhost:3001/api/products \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Wireless keyboard","description":"Compact 65%","price":79.99}'
+
+curl "http://localhost:3001/api/products?page=1&limit=10"
 ```
 
-Without global `turbo`:
+## API
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+Base URL: `http://localhost:3001/api`
+
+| Method   | Path                       | Description                                 |
+| -------- | -------------------------- | ------------------------------------------- |
+| `POST`   | `/products`                | Create a product → emits `product.created`  |
+| `GET`    | `/products?page=&limit=`   | Paginated list (newest first)               |
+| `DELETE` | `/products/:id`            | Delete a product → emits `product.deleted`  |
+| `GET`    | `/health`                  | Liveness + DB connectivity check            |
+
+**Create payload**
+
+```jsonc
+{ "name": "string (1–255)", "description": "string? (≤2000)", "price": 79.99 }
 ```
 
-### Develop
+**Paginated response**
 
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
+```jsonc
+{
+  "data": [ { "id": "uuid", "name": "...", "description": "...", "price": 79.99,
+              "createdAt": "ISO", "updatedAt": "ISO" } ],
+  "meta": { "page": 1, "limit": 10, "total": 1, "totalPages": 1,
+            "hasNextPage": false, "hasPreviousPage": false }
+}
 ```
 
-Without global `turbo`, use your package manager:
+## Messaging
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
+- Queue: `notifications_queue` (durable)
+- Events: `product.created`, `product.deleted`
+
+Events are published with NestJS's `ClientProxy.emit` (fire-and-forget). They are
+a **best-effort side effect**: if the broker is unavailable, the API logs the
+failure but still returns success, since the product change is already committed.
+
+## Scripts
+
+Run from the repo root (Turborepo orchestrates the workspaces):
+
+| Command                                 | Description                          |
+| --------------------------------------- | ------------------------------------ |
+| `pnpm dev`                              | Run all apps in watch mode           |
+| `pnpm build`                            | Build all apps and packages          |
+| `pnpm lint`                             | Lint everything                      |
+| `pnpm check-types`                      | Type-check everything                |
+| `pnpm --filter products test`           | Unit tests for the Products service  |
+| `pnpm --filter products db:generate`    | Generate a migration from the schema |
+| `pnpm --filter products db:migrate:dev` | Apply migrations (local, via tsx)    |
+| `pnpm --filter products db:studio`      | Open Drizzle Studio                  |
+
+## Production notes
+
+Choices that lean toward a production-ready setup rather than the minimum:
+
+- **Validation everywhere** — `class-validator` DTOs on the API, Zod on the
+  frontend form, and Zod-validated environment variables that fail fast at boot.
+- **Migrations, not auto-sync** — schema changes are versioned SQL files applied
+  by a runtime migration runner (no drizzle-kit dependency in the container).
+- **Shared contracts package** — producer, consumer and UI share one typed
+  contract; a payload change is a compile error, not a runtime surprise.
+- **Layered backend** — controller → service → repository, with DB rows mapped to
+  a stable public shape at the boundary.
+- **Graceful shutdown** — Nest shutdown hooks drain the Postgres pool; prices are
+  stored as `NUMERIC(12,2)` to avoid floating-point drift.
+- **Health check** with a real DB ping, and CORS scoped to the web origin.
+- **Frontend UX** — loading skeletons, error + empty states, refetch via TanStack
+  Query, and accessible Radix dialogs with confirmation on delete.
+
+### Containerising the apps
+
+Each app ships a production `Dockerfile` (multi-stage `turbo prune` build).
+Build from the repo root, e.g.:
+
+```bash
+docker build -f apps/products/Dockerfile -t product-creator-products .
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+The Products image runs migrations before starting the API.
